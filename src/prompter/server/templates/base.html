@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}prompter{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand">📋 prompter</a>
+    <nav class="tabs">
+      {% for k in kinds %}
+        <a href="/?kind={{ k }}" class="tab {% if k == kind %}active{% endif %}">
+          {{ "Context" if k == "context" else "Prompts" }}
+        </a>
+      {% endfor %}
+    </nav>
+    <a class="btn primary" href="/new?kind={{ kind }}">+ 새 스니펫</a>
+  </header>
+
+  <main class="layout">
+    <section class="content">
+      {% block content %}{% endblock %}
+    </section>
+
+    <aside class="cart" id="cart-panel">
+      <div class="cart-head">
+        <h2>누적 복사 <span class="badge" id="cart-count">0</span></h2>
+        <div class="cart-actions">
+          <button class="btn small" onclick="copyCart()">전체 복사</button>
+          <button class="btn small ghost" onclick="clearCart()">비우기</button>
+        </div>
+      </div>
+      <ul class="cart-list" id="cart-list"></ul>
+      <p class="cart-empty" id="cart-empty">카드의 “담기”를 눌러 모았다가 한 번에 복사하세요.</p>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

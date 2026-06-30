@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}prompter — {{ "편집" if snippet and snippet.id else "새 스니펫" }}{% endblock %}
+{% block content %}
+  <form class="editor" method="post" action="/save">
+    <input type="hidden" name="snippet_id" value="{{ snippet.id if snippet and snippet.id else '' }}">
+
+    {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+    <div class="field">
+      <label>종류</label>
+      <div class="kind-pick">
+        {% for k in kinds %}
+          <label class="radio">
+            <input type="radio" name="kind" value="{{ k }}"
+                   {% if (snippet and snippet.kind == k) or (not snippet and kind == k) %}checked{% endif %}>
+            {{ "Context (CLAUDE.md / AGENTS.md)" if k == "context" else "Prompt 스니펫" }}
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="title">제목 <span class="hint">(사람이 보기 위한 라벨)</span></label>
+      <input id="title" name="title" type="text" value="{{ snippet.title if snippet else '' }}"
+             placeholder="예: 코딩 스타일 규칙">
+    </div>
+
+    <div class="field">
+      <label for="name">고유 이름 <span class="hint">(컴파일 시 플레이스홀더 키, 소문자/숫자/-/_)</span></label>
+      <input id="name" name="name" type="text" value="{{ snippet.name if snippet else '' }}"
+             placeholder="비우면 제목에서 자동 생성됩니다 (예: coding-style)">
+      <p class="hint">컴파일 결과: <code>&lt;!-- prompter:이름 --&gt; … &lt;!-- /prompter:이름 --&gt;</code></p>
+    </div>
+
+    <div class="field">
+      <label for="tags">태그 <span class="hint">(쉼표로 구분)</span></label>
+      <input id="tags" name="tags" type="text" value="{{ snippet.tags if snippet else '' }}"
+             placeholder="예: python, style, review">
+    </div>
+
+    <div class="field">
+      <label for="body">내용</label>
+      <textarea id="body" name="body" rows="16" placeholder="마크다운/프롬프트 본문...">{{ snippet.body if snippet else '' }}</textarea>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn primary" type="submit">저장</button>
+      <a class="btn ghost" href="/?kind={{ snippet.kind if snippet else kind }}">취소</a>
+    </div>
+  </form>
+{% endblock %}
