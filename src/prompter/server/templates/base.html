@@ -33,6 +33,10 @@
           <button class="btn small ghost" onclick="clearCart()">비우기</button>
         </div>
       </div>
+      <label class="cart-option">
+        <input type="checkbox" id="cart-markers" onchange="onCartMarkersToggle(this)" />
+        블록 마커 포함
+      </label>
       <ul class="cart-list" id="cart-list"></ul>
       <p class="cart-empty" id="cart-empty">카드의 “담기”를 눌러 모았다가 한 번에 복사하세요.</p>
     </aside>

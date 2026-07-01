@@ -2,6 +2,7 @@
 // The cart is kept in localStorage so it survives navigation between pages.
 
 const CART_KEY = "prompter-cart-v1";
+const CART_MARKERS_KEY = "prompter-cart-markers-v1";
 
 function loadCart() {
   try {
@@ -12,6 +13,16 @@ function loadCart() {
 }
 function saveCart(items) {
   localStorage.setItem(CART_KEY, JSON.stringify(items));
+}
+
+function loadCartMarkers() {
+  return localStorage.getItem(CART_MARKERS_KEY) === "1";
+}
+function saveCartMarkers(on) {
+  localStorage.setItem(CART_MARKERS_KEY, on ? "1" : "0");
+}
+function onCartMarkersToggle(input) {
+  saveCartMarkers(input.checked);
 }
 
 function toast(msg) {
@@ -87,7 +98,10 @@ function copyCart() {
     toast("담긴 항목이 없습니다");
     return;
   }
-  const text = items.map((i) => i.body.trim()).join("\n\n");
+  const withMarkers = loadCartMarkers();
+  const text = items
+    .map((i) => (withMarkers ? renderBlock(i.name, i.body) : i.body.trim()))
+    .join("\n\n");
   copyText(text, `${items.length}개 항목을 누적 복사했습니다`);
 }
 
@@ -113,4 +127,8 @@ function renderCart() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", renderCart);
+document.addEventListener("DOMContentLoaded", () => {
+  const markers = document.getElementById("cart-markers");
+  if (markers) markers.checked = loadCartMarkers();
+  renderCart();
+});
