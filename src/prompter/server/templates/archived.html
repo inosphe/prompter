@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}prompter — 보관함{% endblock %}
+{% block content %}
+  <div class="page-head">
+    <h2>보관함 <span class="badge">{{ snippets | length }}</span></h2>
+    <p class="muted">보관된 스니펫입니다. 되돌리거나 완전히 삭제할 수 있습니다.</p>
+  </div>
+  {% if not snippets %}
+    <div class="empty">
+      <p>보관된 스니펫이 없습니다.</p>
+      <a class="btn primary" href="/">스니펫으로 돌아가기</a>
+    </div>
+  {% else %}
+    <div class="grid">
+      {% for s in snippets %}
+        <article class="card archived" id="snippet-{{ s.id }}">
+          <div class="card-head">
+            <div>
+              <h3>{{ s.title or s.name }}</h3>
+              <code class="name">{{ s.name }}</code>
+              <span class="tag">{{ "Context" if s.kind == "context" else "Prompt" }}</span>
+            </div>
+            <div class="card-menu">
+              <button class="btn small"
+                      hx-post="/unarchive/{{ s.id }}"
+                      hx-target="#snippet-{{ s.id }}"
+                      hx-swap="outerHTML"
+                      hx-confirm="'{{ s.name }}' 스니펫을 보관 해제할까요?">되돌리기</button>
+              <button class="btn small ghost danger"
+                      hx-post="/delete/{{ s.id }}"
+                      hx-target="#snippet-{{ s.id }}"
+                      hx-swap="outerHTML"
+                      hx-confirm="'{{ s.name }}' 스니펫을 완전히 삭제할까요? 되돌릴 수 없습니다.">삭제</button>
+            </div>
+          </div>
+          {% if s.tag_list %}
+            <div class="tags">
+              {% for t in s.tag_list %}<span class="tag">{{ t }}</span>{% endfor %}
+            </div>
+          {% endif %}
+          <pre class="body" data-name="{{ s.name }}">{{ s.body }}</pre>
+          <div class="card-actions">
+            <button class="btn small" data-body="{{ s.body }}" onclick="copyBody(this)">복사</button>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

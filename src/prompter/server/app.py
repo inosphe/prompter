@@ -109,6 +109,31 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
             db.create(kind=kind, name=name, title=title, body=body, tags=tags)
         return RedirectResponse(f"/?kind={kind}", status_code=303)
 
+    @app.get("/archived", response_class=HTMLResponse)
+    def archived_view(request: Request):
+        snippets = db.list_archived()
+        return TEMPLATES.TemplateResponse(
+            request,
+            "archived.html",
+            {
+                "snippets": snippets,
+                "kind": "context",
+                "kinds": KINDS,
+                "archived_view": True,
+            },
+        )
+
+    @app.post("/archive/{snippet_id}")
+    def archive(snippet_id: int):
+        # HTMX archive: removing the card from the DOM is enough.
+        db.set_archived(snippet_id, True)
+        return Response(status_code=200)
+
+    @app.post("/unarchive/{snippet_id}")
+    def unarchive(snippet_id: int):
+        db.set_archived(snippet_id, False)
+        return Response(status_code=200)
+
     @app.post("/delete/{snippet_id}")
     def delete(snippet_id: int):
         # HTMX delete: removing the card from the DOM is enough.

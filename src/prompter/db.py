@@ -42,6 +42,7 @@ class Snippet:
     position: int
     created_at: str
     updated_at: str
+    archived: int = 0
 
     @property
     def tag_list(self) -> list[str]:
@@ -64,6 +65,7 @@ CREATE TABLE IF NOT EXISTS snippets (
     position   INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    archived   INTEGER NOT NULL DEFAULT 0,
     UNIQUE (kind, name)
 );
 """
@@ -77,7 +79,16 @@ class Database:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        # Add columns introduced after the initial schema for existing DBs.
+        cols = {r["name"] for r in self._conn.execute("PRAGMA table_info(snippets)")}
+        if "archived" not in cols:
+            self._conn.execute(
+                "ALTER TABLE snippets ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"
+            )
 
     def close(self) -> None:
         self._conn.close()
@@ -88,16 +99,25 @@ class Database:
         return Snippet(**{k: row[k] for k in row.keys()})
 
     # -- queries -----------------------------------------------------------
-    def list(self, kind: str | None = None) -> list[Snippet]:
+    def list(self, kind: str | None = None, *, archived: bool = False) -> list[Snippet]:
+        flag = 1 if archived else 0
         if kind:
             cur = self._conn.execute(
-                "SELECT * FROM snippets WHERE kind = ? ORDER BY position, name",
-                (kind,),
+                "SELECT * FROM snippets WHERE kind = ? AND archived = ? "
+                "ORDER BY position, name",
+                (kind, flag),
             )
         else:
             cur = self._conn.execute(
-                "SELECT * FROM snippets ORDER BY kind, position, name"
+                "SELECT * FROM snippets WHERE archived = ? ORDER BY kind, position, name",
+                (flag,),
             )
+        return [self._row_to_snippet(r) for r in cur.fetchall()]
+
+    def list_archived(self) -> list[Snippet]:
+        cur = self._conn.execute(
+            "SELECT * FROM snippets WHERE archived = 1 ORDER BY updated_at DESC, kind, name"
+        )
         return [self._row_to_snippet(r) for r in cur.fetchall()]
 
     def get(self, snippet_id: int) -> Snippet | None:
@@ -162,6 +182,14 @@ class Database:
         )
         self._conn.commit()
         return self.get(snippet_id)
+
+    def set_archived(self, snippet_id: int, archived: bool) -> bool:
+        cur = self._conn.execute(
+            "UPDATE snippets SET archived = ?, updated_at = ? WHERE id = ?",
+            (1 if archived else 0, _now(), snippet_id),
+        )
+        self._conn.commit()
+        return cur.rowcount > 0
 
     def delete(self, snippet_id: int) -> bool:
         cur = self._conn.execute("DELETE FROM snippets WHERE id = ?", (snippet_id,))

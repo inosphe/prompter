@@ -12,10 +12,11 @@
     <a href="/" class="brand">📋 prompter</a>
     <nav class="tabs">
       {% for k in kinds %}
-        <a href="/?kind={{ k }}" class="tab {% if k == kind %}active{% endif %}">
+        <a href="/?kind={{ k }}" class="tab {% if k == kind and not archived_view %}active{% endif %}">
           {{ "Context" if k == "context" else "Prompts" }}
         </a>
       {% endfor %}
+      <a href="/archived" class="tab {% if archived_view %}active{% endif %}">보관함</a>
     </nav>
     <a class="btn primary" href="/new?kind={{ kind }}">+ 새 스니펫</a>
   </header>

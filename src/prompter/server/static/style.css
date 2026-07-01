@@ -107,6 +107,13 @@ body {
 
 .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
 
+.page-head { margin-bottom: 16px; }
+.page-head h2 { margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+.page-head .muted, .muted { color: var(--muted); }
+.page-head p { margin: 0; font-size: 13px; }
+.card.archived { opacity: 0.85; }
+.card.archived .name { color: var(--muted); }
+
 /* cart */
 .cart {
   background: var(--panel);
