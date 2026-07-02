@@ -4,7 +4,12 @@ Context (`CLAUDE.md` / `AGENTS.md`) **and** prompt snippet manager.
 
 - **SQLite** snippet DB (context + prompt snippets, kept separate).
 - **Web editor** (FastAPI + HTMX + Jinja2): create / edit / delete, one-click
-  copy, and an **accumulative copy** cart to grab several snippets at once.
+  copy (with an optional "블록 마커 포함" toggle per card), and an
+  **accumulative copy** cart to grab several snippets at once.
+- **Templates**: save a cart combination as a named, per-kind template
+  (Context / Prompt kept separate). A template references its member snippets,
+  so editing a member is reflected automatically; copy it live or load it back
+  into the cart.
 - **CLI compiler**: pick context snippets from the running server and merge them
   into a local `CLAUDE.md` / `AGENTS.md` — existing content is preserved, only the
   matching placeholder block is replaced (otherwise it is appended).

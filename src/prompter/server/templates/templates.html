@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}prompter — templates ({{ kind }}){% endblock %}
+{% block content %}
+  <div class="page-head">
+    <h2>템플릿 <span class="muted">· {{ "Context" if kind == "context" else "Prompt" }}</span></h2>
+    <p class="muted">담아둔 스니펫 조합을 저장한 템플릿입니다. 멤버 스니펫을 수정하면 자동으로 반영됩니다.</p>
+    <nav class="tabs" style="margin-top:10px">
+      {% for k in kinds %}
+        <a href="/templates?kind={{ k }}" class="tab {% if k == kind %}active{% endif %}">
+          {{ "Context" if k == "context" else "Prompt" }}
+        </a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {% if not templates %}
+    <div class="empty">
+      <p>저장된 <strong>{{ "Context" if kind == "context" else "Prompt" }}</strong> 템플릿이 없습니다.</p>
+      <p class="muted">{{ "Context" if kind == "context" else "Prompt" }} 탭에서 카드를 “담기”로 모은 뒤, 담기 패널에서 “템플릿으로 저장”을 누르세요.</p>
+    </div>
+  {% else %}
+    <div class="grid">
+      {% for t in templates %}
+        <article class="card" id="template-{{ t.id }}"
+                 data-id="{{ t.id }}" data-kind="{{ t.kind }}"
+                 data-members='{{ t.members | tojson }}'>
+          <div class="card-head">
+            <div>
+              <h3>{{ t.title or t.name }}</h3>
+              <code class="name">{{ t.name }}</code>
+            </div>
+            <div class="card-menu">
+              <button class="btn small ghost"
+                      hx-post="/templates/{{ t.id }}/delete"
+                      hx-target="#template-{{ t.id }}"
+                      hx-swap="outerHTML"
+                      hx-confirm="'{{ t.name }}' 템플릿을 삭제할까요? (멤버 스니펫은 그대로 유지됩니다)">삭제</button>
+            </div>
+          </div>
+
+          <ol class="member-list">
+            {% for m in t.members %}
+              <li>{{ m.title or m.name }} <code>{{ m.name }}</code></li>
+            {% else %}
+              <li class="muted">멤버 없음</li>
+            {% endfor %}
+          </ol>
+
+          <div class="card-actions">
+            <button class="btn small" onclick="copyTemplate(this)">복사</button>
+            <button class="btn small" onclick="loadTemplateToCart(this)">＋ 담기에 불러오기</button>
+            {% if kind == "context" %}
+              <label class="inline-option">
+                <input type="checkbox" class="tpl-markers"> 블록 마커 포함
+              </label>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

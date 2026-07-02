@@ -12,10 +12,11 @@
     <a href="/" class="brand">📋 prompter</a>
     <nav class="tabs">
       {% for k in kinds %}
-        <a href="/?kind={{ k }}" class="tab {% if k == kind and not archived_view %}active{% endif %}">
+        <a href="/?kind={{ k }}" class="tab {% if k == kind and not archived_view and not templates_view %}active{% endif %}">
           {{ "Context" if k == "context" else "Prompts" }}
         </a>
       {% endfor %}
+      <a href="/templates?kind={{ kind }}" class="tab {% if templates_view %}active{% endif %}">템플릿</a>
       <a href="/skills" class="tab {% if skills_view %}active{% endif %}">Skills</a>
       <a href="/archived" class="tab {% if archived_view %}active{% endif %}">보관함</a>
     </nav>
@@ -41,6 +42,11 @@
       </label>
       <ul class="cart-list" id="cart-list"></ul>
       <p class="cart-empty" id="cart-empty">카드의 “담기”를 눌러 모았다가 한 번에 복사하세요.</p>
+      <div class="cart-save" data-kind="{{ kind }}">
+        <input type="text" id="tpl-name" placeholder="템플릿 이름 (예: review-set)" />
+        <button class="btn small primary" onclick="saveTemplate()">템플릿으로 저장</button>
+        <p class="hint" id="tpl-save-hint">현재 <b>{{ "Context" if kind == "context" else "Prompt" }}</b> 담김 항목이 저장됩니다.</p>
+      </div>
     </aside>
   </main>
 

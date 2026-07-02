@@ -137,6 +137,21 @@ body {
 .cart-list li button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; }
 .cart-list li button:hover { color: var(--danger); }
 .cart-empty { color: var(--muted); font-size: 12px; margin-top: 12px; }
+.cart-list li .mini-tag {
+  background: var(--accent-2); color: #06231f; border-radius: 4px;
+  padding: 0 5px; font-size: 10px; font-weight: 700; margin-right: 4px;
+}
+.cart-save { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.cart-save input[type=text] { padding: 8px 10px; font-size: 13px; }
+.cart-save .hint { margin: 0; }
+
+/* per-card "블록 마커 포함" toggle (consistent with the cart toggle) */
+.inline-option { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; }
+
+/* template cards */
+.member-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--text); font-size: 13px; }
+.member-list li code { color: var(--accent-2); font-size: 11px; }
+.member-list li.muted { list-style: none; margin-left: -20px; }
 
 /* editor form */
 .editor { max-width: 760px; display: flex; flex-direction: column; gap: 16px; }

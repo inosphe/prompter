@@ -31,14 +31,17 @@
           {% endif %}
           <pre class="body" data-name="{{ s.name }}">{{ s.body }}</pre>
           <div class="card-actions">
-            <button class="btn small" data-body="{{ s.body }}" onclick="copyBody(this)">복사</button>
+            <button class="btn small"
+                    data-name="{{ s.name }}" data-body="{{ s.body }}"
+                    onclick="copyBody(this)">복사</button>
             <button class="btn small"
                     data-name="{{ s.name }}" data-title="{{ s.title }}" data-body="{{ s.body }}"
+                    data-kind="{{ s.kind }}" data-id="{{ s.id }}"
                     onclick="addToCart(this)">＋ 담기</button>
             {% if kind == "context" %}
-              <button class="btn small ghost"
-                      data-name="{{ s.name }}" data-body="{{ s.body }}"
-                      onclick="copyBlock(this)" title="마커 포함 블록 복사">블록 복사</button>
+              <label class="inline-option">
+                <input type="checkbox" class="card-markers"> 블록 마커 포함
+              </label>
             {% endif %}
           </div>
         </article>

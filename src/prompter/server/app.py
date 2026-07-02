@@ -166,6 +166,83 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     def health():
         return {"status": "ok"}
 
+    # ------------------------------------------------------------- templates
+    def _compose_template(tpl, *, markers: bool) -> str:
+        parts = []
+        for m in tpl.members:
+            if markers and tpl.kind == "context":
+                parts.append(render_block(m.name, m.body))
+            else:
+                parts.append(m.body.strip())
+        return "\n\n".join(parts)
+
+    @app.get("/templates", response_class=HTMLResponse)
+    def templates_view(request: Request, kind: str = "context"):
+        if kind not in KINDS:
+            kind = "context"
+        templates = [t.to_dict() for t in db.list_templates(kind)]
+        return TEMPLATES.TemplateResponse(
+            request,
+            "templates.html",
+            {
+                "templates": templates,
+                "kind": kind,
+                "kinds": KINDS,
+                "templates_view": True,
+            },
+        )
+
+    @app.get("/api/templates")
+    def api_templates_list(kind: str = "context"):
+        if kind not in KINDS:
+            return JSONResponse({"error": f"invalid kind: {kind}"}, status_code=400)
+        items = [t.to_dict() for t in db.list_templates(kind)]
+        return {"kind": kind, "count": len(items), "templates": items}
+
+    @app.post("/api/templates")
+    async def api_templates_save(request: Request):
+        payload = await request.json()
+        kind = payload.get("kind", "context")
+        if kind not in KINDS:
+            return JSONResponse({"error": f"invalid kind: {kind}"}, status_code=400)
+        name = (payload.get("name") or "").strip() or slugify(payload.get("title", ""))
+        if not is_valid_name(name):
+            return JSONResponse({"error": f"invalid name: {name!r}"}, status_code=400)
+        # Members may be given as snippet names (from the cart) or ids.
+        member_ids: list[int] = []
+        for ref in payload.get("members", []):
+            if isinstance(ref, int):
+                member_ids.append(ref)
+            elif isinstance(ref, dict) and "id" in ref:
+                member_ids.append(int(ref["id"]))
+            else:
+                snip = db.get_by_name(kind, str(ref))
+                if snip and snip.id is not None:
+                    member_ids.append(snip.id)
+        if not member_ids:
+            return JSONResponse(
+                {"error": "no valid members for this kind"}, status_code=400
+            )
+        tpl = db.save_template(
+            kind=kind, name=name, title=payload.get("title", ""), member_ids=member_ids
+        )
+        return JSONResponse(
+            {"id": tpl.id, "name": tpl.name, "count": len(tpl.members)}, status_code=201
+        )
+
+    @app.get("/api/templates/{template_id}/compose")
+    def api_templates_compose(template_id: int, markers: int = 0):
+        tpl = db.get_template(template_id)
+        if tpl is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        text = _compose_template(tpl, markers=bool(markers))
+        return {"id": tpl.id, "count": len(tpl.members), "text": text}
+
+    @app.post("/templates/{template_id}/delete")
+    def template_delete(template_id: int):
+        db.delete_template(template_id)
+        return Response(status_code=200)
+
     # ------------------------------------------------------ artifacts (api)
     @app.get("/api/artifacts")
     def api_artifacts_list(kind: str = "skill"):

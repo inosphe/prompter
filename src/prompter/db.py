@@ -54,6 +54,34 @@ class Snippet:
         return d
 
 
+@dataclass
+class Template:
+    """A named, ordered combination of snippets of one ``kind``.
+
+    Members are stored as references to snippet ids, so editing a member
+    snippet is reflected automatically wherever the template is used.
+    """
+
+    id: int | None
+    kind: str
+    name: str
+    title: str
+    created_at: str
+    updated_at: str
+    members: list[Snippet]
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "name": self.name,
+            "title": self.title,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            "members": [m.to_dict() for m in self.members],
+        }
+
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS snippets (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,6 +95,24 @@ CREATE TABLE IF NOT EXISTS snippets (
     updated_at TEXT NOT NULL,
     archived   INTEGER NOT NULL DEFAULT 0,
     UNIQUE (kind, name)
+);
+
+CREATE TABLE IF NOT EXISTS templates (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind       TEXT NOT NULL CHECK (kind IN ('context','prompt')),
+    name       TEXT NOT NULL,
+    title      TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE (kind, name)
+);
+
+CREATE TABLE IF NOT EXISTS template_members (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id INTEGER NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
+    snippet_id  INTEGER NOT NULL REFERENCES snippets(id) ON DELETE CASCADE,
+    position    INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (template_id, snippet_id)
 );
 """
 
@@ -193,5 +239,108 @@ class Database:
 
     def delete(self, snippet_id: int) -> bool:
         cur = self._conn.execute("DELETE FROM snippets WHERE id = ?", (snippet_id,))
+        self._conn.commit()
+        return cur.rowcount > 0
+
+    # -- templates ---------------------------------------------------------
+    def _template_members(self, template_id: int) -> list[Snippet]:
+        """Resolve a template's members to live snippets, in order."""
+        cur = self._conn.execute(
+            """SELECT s.* FROM template_members tm
+               JOIN snippets s ON s.id = tm.snippet_id
+               WHERE tm.template_id = ?
+               ORDER BY tm.position, tm.id""",
+            (template_id,),
+        )
+        return [self._row_to_snippet(r) for r in cur.fetchall()]
+
+    def _row_to_template(self, row: sqlite3.Row) -> Template:
+        return Template(
+            id=row["id"],
+            kind=row["kind"],
+            name=row["name"],
+            title=row["title"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            members=self._template_members(row["id"]),
+        )
+
+    def list_templates(self, kind: str | None = None) -> list[Template]:
+        if kind:
+            cur = self._conn.execute(
+                "SELECT * FROM templates WHERE kind = ? ORDER BY name", (kind,)
+            )
+        else:
+            cur = self._conn.execute("SELECT * FROM templates ORDER BY kind, name")
+        return [self._row_to_template(r) for r in cur.fetchall()]
+
+    def get_template(self, template_id: int) -> Template | None:
+        cur = self._conn.execute("SELECT * FROM templates WHERE id = ?", (template_id,))
+        row = cur.fetchone()
+        return self._row_to_template(row) if row else None
+
+    def get_template_by_name(self, kind: str, name: str) -> Template | None:
+        cur = self._conn.execute(
+            "SELECT * FROM templates WHERE kind = ? AND name = ?", (kind, name)
+        )
+        row = cur.fetchone()
+        return self._row_to_template(row) if row else None
+
+    def save_template(
+        self, *, kind: str, name: str, title: str, member_ids: list[int]
+    ) -> Template:
+        """Create or replace a template by ``(kind, name)``.
+
+        Only snippet ids of the matching ``kind`` are kept as members; the
+        given order is preserved. Replacing wipes and re-inserts members.
+        """
+        if kind not in KINDS:
+            raise ValueError(f"invalid kind: {kind!r}")
+        ts = _now()
+        existing = self._conn.execute(
+            "SELECT id FROM templates WHERE kind = ? AND name = ?", (kind, name)
+        ).fetchone()
+
+        # Keep only ids that exist and share this kind, de-duped, order kept.
+        valid: list[int] = []
+        seen: set[int] = set()
+        for sid in member_ids:
+            if sid in seen:
+                continue
+            row = self._conn.execute(
+                "SELECT id FROM snippets WHERE id = ? AND kind = ?", (sid, kind)
+            ).fetchone()
+            if row:
+                valid.append(sid)
+                seen.add(sid)
+
+        if existing is None:
+            cur = self._conn.execute(
+                "INSERT INTO templates (kind, name, title, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (kind, name, title, ts, ts),
+            )
+            template_id = cur.lastrowid
+        else:
+            template_id = existing["id"]
+            self._conn.execute(
+                "UPDATE templates SET title = ?, updated_at = ? WHERE id = ?",
+                (title, ts, template_id),
+            )
+            self._conn.execute(
+                "DELETE FROM template_members WHERE template_id = ?", (template_id,)
+            )
+
+        for pos, sid in enumerate(valid):
+            self._conn.execute(
+                "INSERT INTO template_members (template_id, snippet_id, position) "
+                "VALUES (?, ?, ?)",
+                (template_id, sid, pos),
+            )
+        self._conn.commit()
+        return self.get_template(template_id)  # type: ignore[return-value]
+
+    def delete_template(self, template_id: int) -> bool:
+        cur = self._conn.execute("DELETE FROM templates WHERE id = ?", (template_id,))
         self._conn.commit()
         return cur.rowcount > 0
