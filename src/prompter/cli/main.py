@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -15,6 +16,13 @@ app = typer.Typer(
     help="Context (CLAUDE.md/AGENTS.md) & prompt snippet manager.",
     no_args_is_help=True,
 )
+
+DEFAULT_SERVER = "http://127.0.0.1:8765"
+
+
+def resolve_server(server: Optional[str]) -> str:
+    """Server URL precedence: explicit --server > PROMPTER_SERVER env > default."""
+    return server or os.environ.get("PROMPTER_SERVER") or DEFAULT_SERVER
 
 
 def _err(msg: str) -> None:
@@ -47,7 +55,12 @@ def serve(
 # ------------------------------------------------------------------- compile
 @app.command()
 def compile(
-    server: str = typer.Option("http://127.0.0.1:8765", help="Base URL of a running prompter server."),
+    server: Optional[str] = typer.Option(
+        None,
+        "--server",
+        help="Base URL of a running prompter server "
+        f"(env: PROMPTER_SERVER, default: {DEFAULT_SERVER}).",
+    ),
     directory: str = typer.Option(".", "--dir", help="Project directory to compile into."),
     target: str = typer.Option("auto", help="Target file: auto | claude | agents."),
     file: Optional[str] = typer.Option(None, help="Explicit output file path (overrides --target/--dir)."),
@@ -57,7 +70,7 @@ def compile(
     """Pick context snippets from the server and merge them into CLAUDE.md/AGENTS.md."""
     import httpx
 
-    url = server.rstrip("/") + "/api/snippets"
+    url = resolve_server(server).rstrip("/") + "/api/snippets"
     try:
         resp = httpx.get(url, params={"kind": "context"}, timeout=10.0)
         resp.raise_for_status()
@@ -101,6 +114,35 @@ def compile(
         typer.echo(f"  추가된 블록: {', '.join(result.appended)}")
     if not result.replaced and not result.appended:
         typer.echo("  변경 사항 없음.")
+
+
+# ---------------------------------------------------------------- skills TUI
+@app.command()
+def skills(
+    server: Optional[str] = typer.Option(
+        None,
+        "--server",
+        help="Base URL of a running prompter server "
+        f"(env: PROMPTER_SERVER, default: {DEFAULT_SERVER}).",
+    ),
+    directory: str = typer.Option(".", "--dir", help="Project dir (for its .claude/skills scope)."),
+    scope: str = typer.Option(
+        "both", help="Local scopes to scan: global | project | both."
+    ),
+):
+    """Open the TUI to sync local skills with the server (push/pull)."""
+    scopes_map = {
+        "both": ("global", "project"),
+        "global": ("global",),
+        "project": ("project",),
+    }
+    if scope not in scopes_map:
+        _err("scope 는 global | project | both 중 하나여야 합니다.")
+        raise typer.Exit(1)
+
+    from .tui import run_tui
+
+    run_tui(resolve_server(server), directory, scopes_map[scope])
 
 
 # --------------------------------------------------------------- consolidate

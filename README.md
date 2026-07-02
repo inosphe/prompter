@@ -10,6 +10,9 @@ Context (`CLAUDE.md` / `AGENTS.md`) **and** prompt snippet manager.
   matching placeholder block is replaced (otherwise it is appended).
 - **Consolidate**: collapse `CLAUDE.md` into a single `@agents.md` link and unify
   everything into `AGENTS.md`.
+- **Skills sync**: store Claude Code **skills** (directory bundles) on the server
+  as *artifacts*, and use a **TUI** to compare local skills (`~/.claude/skills`
+  and `<cwd>/.claude/skills`) against the server catalog and push/pull them.
 
 ## Placeholder format
 
@@ -53,17 +56,37 @@ Unify into AGENTS.md:
 uv run prompter consolidate      # CLAUDE.md becomes `@agents.md`
 ```
 
-Override the DB location with `--db` or the `PROMPTER_DB` env var.
+Sync skills between the local system and the server (TUI):
+
+```sh
+uv run prompter skills                       # both scopes vs server catalog
+uv run prompter skills --scope global        # only ~/.claude/skills
+uv run prompter skills --dir path/to/project # its .claude/skills scope
+```
+
+The TUI shows each skill's status — `=` in sync, `≠` diverged, `↑` local-only,
+`↓` server-only. Keys: `Tab` switch pane, `Space` select, `→` push, `←` pull,
+`g` pull-target scope, `f` force-overwrite, `r` refresh, `q` quit. The server
+also exposes a **Skills** web tab (browse the file tree, zip download, zip
+upload) and a JSON API under `/api/artifacts`.
+
+Override the DB location with `--db` or the `PROMPTER_DB` env var. The server
+URL for `compile` / `skills` resolves as `--server` > `PROMPTER_SERVER` env >
+`http://127.0.0.1:8765`.
 
 ## Layout
 
 ```
 src/prompter/
-  placeholder.py     # marker format + merge logic (shared by server & CLI)
-  db.py              # sqlite storage
-  server/app.py      # FastAPI: web editor + /api/snippets
-  server/templates/  # Jinja2 (HTMX)
-  server/static/     # css + cart/clipboard js
-  cli/main.py        # typer: serve / compile / consolidate
-  cli/compile.py     # file IO + consolidation
+  placeholder.py       # marker format + merge logic (shared by server & CLI)
+  db.py                # sqlite storage (context/prompt snippets)
+  artifacts.py         # sqlite storage for file-bundle artifacts (skills)
+  server/app.py        # FastAPI: web editor + /api/snippets + /api/artifacts
+  server/templates/    # Jinja2 (HTMX) incl. skills.html / skill_detail.html
+  server/static/       # css + cart/clipboard js
+  cli/main.py          # typer: serve / compile / skills / consolidate
+  cli/compile.py       # file IO + consolidation
+  cli/skills_scan.py   # scan/write local ~/.claude & ./.claude skills
+  cli/artifact_client.py # http client + local↔server diff
+  cli/tui.py           # Textual two-pane sync TUI
 ```

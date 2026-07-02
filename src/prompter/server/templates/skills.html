@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}prompter — skills{% endblock %}
+{% block content %}
+  <div class="skills-head">
+    <h2>Skills</h2>
+    <form class="upload" action="/skills/upload" method="post" enctype="multipart/form-data">
+      <input type="file" name="bundle" accept=".zip" required>
+      <button class="btn small primary" type="submit">zip 업로드</button>
+    </form>
+  </div>
+
+  {% if not artifacts %}
+    <div class="empty">
+      <p>아직 서버에 저장된 skill이 없습니다.</p>
+      <p class="muted">CLI에서 <code>prompter skills</code> TUI로 로컬 skill을 push하거나, 위에서 zip을 업로드하세요.</p>
+    </div>
+  {% else %}
+    <div class="grid">
+      {% for a in artifacts %}
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>{{ a.title or a.name }}</h3>
+              <code class="name">{{ a.name }}</code>
+            </div>
+            <div class="card-menu">
+              <a class="btn small ghost" href="/skills/{{ a.name }}">열기</a>
+              <a class="btn small" href="/artifacts/{{ a.name }}/download.zip">zip</a>
+            </div>
+          </div>
+          {% if a.description %}<p class="muted">{{ a.description }}</p>{% endif %}
+          <div class="tags">
+            {% if a.origin_scope %}<span class="tag">{{ a.origin_scope }}</span>{% endif %}
+            <span class="tag">{{ a.file_count }} files</span>
+            <span class="tag mono">{{ a.bundle_sha[:8] }}</span>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

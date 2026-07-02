@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}prompter — {{ artifact.name }}{% endblock %}
+{% block content %}
+  <div class="skills-head">
+    <div>
+      <h2>{{ artifact.title or artifact.name }}</h2>
+      <code class="name">{{ artifact.name }}</code>
+      {% if artifact.origin_scope %}<span class="tag">{{ artifact.origin_scope }}</span>{% endif %}
+    </div>
+    <div class="card-menu">
+      <a class="btn small ghost" href="/skills">← 목록</a>
+      <a class="btn small" href="/artifacts/{{ artifact.name }}/download.zip">zip 다운로드</a>
+    </div>
+  </div>
+
+  {% if artifact.description %}<p class="muted">{{ artifact.description }}</p>{% endif %}
+
+  <div class="filetree">
+    {% for f in artifact.files %}
+      <details class="file" {% if f.path == 'SKILL.md' %}open{% endif %}>
+        <summary>
+          <code>{{ f.path }}</code>
+          <span class="muted">{{ f.size }} B{% if f.is_binary %} · binary{% endif %}</span>
+        </summary>
+        {% if f.is_binary %}
+          <p class="muted">바이너리 파일 — <a href="/artifacts/{{ artifact.name }}/download.zip">zip에서 받기</a></p>
+        {% else %}
+          <pre class="body">{{ f.content.decode('utf-8', 'replace') }}</pre>
+        {% endif %}
+      </details>
+    {% endfor %}
+  </div>
+{% endblock %}

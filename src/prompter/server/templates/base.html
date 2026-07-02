@@ -16,6 +16,7 @@
           {{ "Context" if k == "context" else "Prompts" }}
         </a>
       {% endfor %}
+      <a href="/skills" class="tab {% if skills_view %}active{% endif %}">Skills</a>
       <a href="/archived" class="tab {% if archived_view %}active{% endif %}">보관함</a>
     </nav>
     <a class="btn primary" href="/new?kind={{ kind }}">+ 새 스니펫</a>

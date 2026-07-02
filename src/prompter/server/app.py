@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
 from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
@@ -9,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from ..artifacts import ArtifactFile, ArtifactStore
 from ..db import KINDS, Database
 from ..placeholder import is_valid_name, render_block, slugify
 
@@ -19,9 +22,11 @@ TEMPLATES = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 def create_app(db_path: str | Path | None = None) -> FastAPI:
     app = FastAPI(title="prompter")
     db = Database(db_path)
+    artifacts = ArtifactStore(db.path)
 
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
     app.state.db = db
+    app.state.artifacts = artifacts
 
     # ------------------------------------------------------------------ web
     @app.get("/", response_class=HTMLResponse)
@@ -161,4 +166,125 @@ def create_app(db_path: str | Path | None = None) -> FastAPI:
     def health():
         return {"status": "ok"}
 
+    # ------------------------------------------------------ artifacts (api)
+    @app.get("/api/artifacts")
+    def api_artifacts_list(kind: str = "skill"):
+        items = [a.meta_dict() for a in artifacts.list(kind)]
+        return {"kind": kind, "count": len(items), "artifacts": items}
+
+    @app.get("/api/artifacts/{name}")
+    def api_artifacts_get(name: str, kind: str = "skill"):
+        art = artifacts.get(name, kind=kind)
+        if art is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return art.to_json()
+
+    @app.post("/api/artifacts")
+    async def api_artifacts_upsert(request: Request):
+        payload = await request.json()
+        name = (payload.get("name") or "").strip()
+        if not is_valid_name(name):
+            return JSONResponse({"error": f"invalid name: {name!r}"}, status_code=400)
+        try:
+            files = [ArtifactFile.from_json(f) for f in payload.get("files", [])]
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"error": f"bad files: {exc}"}, status_code=400)
+        art, created = artifacts.upsert_bundle(
+            name=name,
+            files=files,
+            kind=payload.get("kind", "skill"),
+            title=payload.get("title", ""),
+            description=payload.get("description", ""),
+            origin_scope=payload.get("origin_scope", ""),
+            origin_path=payload.get("origin_path", ""),
+        )
+        return JSONResponse(
+            {"name": art.name, "created": created, "bundle_sha": art.bundle_sha},
+            status_code=201 if created else 200,
+        )
+
+    @app.delete("/api/artifacts/{name}")
+    def api_artifacts_delete(name: str, kind: str = "skill"):
+        ok = artifacts.delete(name, kind=kind)
+        if not ok:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return {"deleted": name}
+
+    @app.get("/artifacts/{name}/download.zip")
+    def artifacts_download(name: str, kind: str = "skill"):
+        art = artifacts.get(name, kind=kind)
+        if art is None:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in art.files:
+                zf.writestr(f"{art.name}/{f.path}", f.content)
+        buf.seek(0)
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{art.name}.zip"'},
+        )
+
+    # ----------------------------------------------------- artifacts (web)
+    @app.get("/skills", response_class=HTMLResponse)
+    def skills_view(request: Request):
+        items = artifacts.list("skill")
+        return TEMPLATES.TemplateResponse(
+            request,
+            "skills.html",
+            {"artifacts": items, "kind": "context", "kinds": KINDS, "skills_view": True},
+        )
+
+    @app.get("/skills/{name}", response_class=HTMLResponse)
+    def skill_detail(request: Request, name: str):
+        art = artifacts.get(name)
+        if art is None:
+            return RedirectResponse("/skills", status_code=303)
+        return TEMPLATES.TemplateResponse(
+            request,
+            "skill_detail.html",
+            {
+                "artifact": art,
+                "kind": "context",
+                "kinds": KINDS,
+                "skills_view": True,
+            },
+        )
+
+    @app.post("/skills/upload")
+    async def skills_upload(request: Request):
+        form = await request.form()
+        upload = form.get("bundle")
+        if upload is None or not getattr(upload, "filename", ""):
+            return RedirectResponse("/skills", status_code=303)
+        raw = await upload.read()
+        try:
+            files, root = _unpack_zip(raw)
+        except Exception:  # noqa: BLE001
+            return RedirectResponse("/skills", status_code=303)
+        name = slugify(root or Path(upload.filename).stem)
+        artifacts.upsert_bundle(name=name, files=files, origin_scope="", origin_path="upload")
+        return RedirectResponse(f"/skills/{name}", status_code=303)
+
     return app
+
+
+def _unpack_zip(raw: bytes) -> tuple[list[ArtifactFile], str]:
+    """Turn an uploaded zip into ArtifactFiles, stripping a common top dir."""
+    from ..cli.skills_scan import _looks_binary
+
+    entries: list[tuple[str, bytes]] = []
+    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            entries.append((info.filename.replace("\\", "/"), zf.read(info)))
+    # Strip a single common top-level directory if present.
+    tops = {e[0].split("/", 1)[0] for e in entries if "/" in e[0]}
+    root = ""
+    if len(tops) == 1 and all("/" in p for p, _ in entries):
+        root = tops.pop()
+        entries = [(p.split("/", 1)[1], data) for p, data in entries]
+    files = [ArtifactFile.make(p, data, _looks_binary(data)) for p, data in entries if p]
+    return files, root
