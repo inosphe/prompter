@@ -24,6 +24,7 @@ class SkillSyncApp(App):
     Horizontal { height: 1fr; }
     DataTable { width: 1fr; border: round $panel; }
     DataTable:focus { border: round $accent; }
+    DataTable.offline { border: round $error; color: $text-muted; }
     #status { height: auto; padding: 0 1; color: $text-muted; }
     """
 
@@ -49,6 +50,9 @@ class SkillSyncApp(App):
         self.pull_scope = "global"
         self.force = False
         self.rows: list[SyncRow] = []
+        self._server_ok = True
+        self._server_err = ""
+        self._local_err = ""
         # row-key -> SyncRow, and selection sets keyed by row-key
         self._local_map: dict[str, SyncRow] = {}
         self._server_map: dict[str, SyncRow] = {}
@@ -76,13 +80,25 @@ class SkillSyncApp(App):
 
     # ------------------------------------------------------------- data load
     def load(self) -> None:
+        # Local scan and the server fetch are independent: a down/unreachable
+        # server must never hide the locally-scanned skills. Each is guarded on
+        # its own so one failing still renders the other.
         try:
             local = scan_local(self.scopes, self.directory)
-            remote = self.api.list("skill")
+            self._local_err = ""
         except Exception as exc:  # noqa: BLE001
-            self._set_status(f"[red]서버 접근 실패: {exc}  ('prompter serve' 실행 확인)[/red]")
-            self.rows = []
-            return
+            local = []
+            self._local_err = str(exc)
+
+        try:
+            remote = self.api.list("skill")
+            self._server_ok = True
+            self._server_err = ""
+        except Exception as exc:  # noqa: BLE001
+            remote = []
+            self._server_ok = False
+            self._server_err = str(exc)
+
         self.rows = diff(local, remote)
         self._populate()
         self._set_status()
@@ -94,6 +110,14 @@ class SkillSyncApp(App):
         st.clear()
         self._local_map.clear()
         self._server_map.clear()
+
+        # Reflect server reachability on the server pane.
+        if self._server_ok:
+            st.remove_class("offline")
+            st.border_title = "SERVER  " + self.server
+        else:
+            st.add_class("offline")
+            st.border_title = "SERVER  ⚠ 미연결 — " + self.server
 
         for r in self.rows:
             if r.local is not None:
@@ -135,7 +159,18 @@ class SkillSyncApp(App):
             f"[b]{'ON' if self.force else 'off'}[/b] (f)   "
             f"선택 L:{len(self._sel_local)} S:{len(self._sel_server)}"
         )
-        self.query_one("#status", Static).update(extra + "\n" + base if extra else base)
+        lines: list[str] = []
+        if not self._server_ok:
+            lines.append(
+                f"[red]⚠ 서버에 연결할 수 없습니다 ({self.server}) — 로컬 스킬만 표시합니다. "
+                f"push/pull 불가. 'prompter serve' 실행 후 [b]r[/b] 로 새로고침하세요.[/red]"
+            )
+        if self._local_err:
+            lines.append(f"[red]로컬 스캔 오류: {self._local_err}[/red]")
+        if extra:
+            lines.append(extra)
+        lines.append(base)
+        self.query_one("#status", Static).update("\n".join(lines))
 
     # -------------------------------------------------------------- actions
     def action_switch_pane(self) -> None:
@@ -170,6 +205,9 @@ class SkillSyncApp(App):
         self.load()
 
     def action_push(self) -> None:
+        if not self._server_ok:
+            self._set_status("[yellow]서버 미연결 상태라 push할 수 없습니다. 서버를 켠 뒤 r 로 새로고침하세요.[/yellow]")
+            return
         table = self.query_one("#local", DataTable)
         keys = set(self._sel_local)
         if not keys:
@@ -195,6 +233,9 @@ class SkillSyncApp(App):
         self._set_status(msg)
 
     def action_pull(self) -> None:
+        if not self._server_ok:
+            self._set_status("[yellow]서버 미연결 상태라 pull할 수 없습니다. 서버를 켠 뒤 r 로 새로고침하세요.[/yellow]")
+            return
         table = self.query_one("#server", DataTable)
         keys = set(self._sel_server)
         if not keys:
